@@ -101,10 +101,16 @@ server <- function(input, output) {
       input_viz <- shiny::isolate(input$visualization)
       
       if (input_viz == "heatmap" || input_viz == "both") {
-        output_plots <- tagAppendChild(output_plots, plotlyOutput("heatmap"))
+        output_plots <- tagAppendChild(
+          output_plots, 
+          plotlyOutput("heatmap", height = "800px")
+        )
       }
       if (input_viz == "boxplots" || input_viz == "both") {
-        output_plots <- tagAppendChild(output_plots, plotlyOutput("boxplots"))
+        output_plots <- tagAppendChild(
+          output_plots, 
+          plotlyOutput("boxplots", height = "600px")
+        )
       }
       
       return(output_plots)
@@ -160,17 +166,30 @@ server <- function(input, output) {
       dplyr::arrange(match(sample_id, colnames(heatmap_data))) |> 
       tibble::column_to_rownames("sample_id") 
     
-    # TODO: Use the rename function from dplyr
     names(col_side_color)[names(col_side_color) == "host_group_color"] <- "Host type"
     names(col_side_color)[names(col_side_color) == "geographic_location_color"] <- "Geographic origin"
     names(col_side_color)[names(col_side_color) == "sampling_location_color"] <- "Sampling location"
     names(col_side_color)[names(col_side_color) == "young_adult_color"] <- "Developmental stage"
 
+    clustering <- shiny::isolate(input$clustering)
+    
+    if (clustering == "both" && nrow(heatmap_data) == 1) {
+      
+      shinyWidgets::show_alert(
+        title = "Can't operate clustering on only 1 pathway", 
+        text = "Please choose more than 1 pathway in order to operate 
+        the clustering", 
+        type = "error"
+      )
+      
+      return(NULL)
+      
+    }
     
     heatmaply(heatmap_data, 
               RowSideColors = row_side_color, 
               ColSideColors = col_side_color, 
-              dendrogram = shiny::isolate(input$clustering),
+              dendrogram = clustering,
               color = colorRampPalette(rev(brewer.pal(n = 11, name =
                                                         "RdBu")))(1000),
               custom_hovertext = matrix(
