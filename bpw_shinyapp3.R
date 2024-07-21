@@ -24,7 +24,7 @@ ui <- fluidPage(
   shiny::titlePanel("BPW APP"),
   shiny::tabsetPanel(
     shiny::tabPanel(
-      title = "Abstract",
+      title = "The study",
       shiny::includeMarkdown("www/cover_page.md")
     ),
 
@@ -532,8 +532,7 @@ server <- function(input, output) {
       plot_list <- lapply(taxonomy_data_splitted, generate_leaflet_plot_list)
 
       fl = lapply(
-        plot_list
-        , function(j) {
+        plot_list, function(j) {
           fl = tempfile(fileext = ".html")
           htmlwidgets::saveWidget(j, file = fl)
           return(fl)
