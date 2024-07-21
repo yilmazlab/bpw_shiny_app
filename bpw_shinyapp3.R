@@ -8,7 +8,13 @@ library(tidyr)
 library(kableExtra)
 library(dplyr)
 library(GiNA)
-
+library(markdown)
+library(leaflet)
+library(ggplot2)
+library(openxlsx)
+library(stringr)
+library(leafpop)
+library(htmlwidgets)
 source("utils/utils.R")
 
 final_frame <- qs::qread("data/final_frame.qs")
@@ -23,7 +29,7 @@ ui <- fluidPage(
     ),
 
     shiny::tabPanel(
-      title = "Data Visualization",
+      title = "Functional Profile",
       shiny::sidebarLayout(
         sidebarPanel(
           width = 3,
@@ -95,9 +101,24 @@ ui <- fluidPage(
           shiny::tableOutput("table")  # Add tableOutput() here to always display the table at the bottom
         )
       )
-    ))
+    ),
 
+    shiny::tabPanel(
+      title = "Microbiota Profile",
+      shiny::br(),
+      shiny::actionButton(
+        inputId = "display_taxonomy_map",
+        label = "Display Map"
+      ),
+      shiny::br(),
+      shiny::br(),
+      leaflet::leafletOutput(
+        outputId = "leaflet_taxonomy_map",
+        height = "1200px"
+      )
+    )
 
+  )
 
 )
 
@@ -467,6 +488,73 @@ server <- function(input, output) {
     HTML(legend_html)
   })
 
+
+  shiny::observeEvent(input$display_taxonomy_map, {
+
+
+    output$leaflet_taxonomy_map <- leaflet::renderLeaflet({
+
+      taxonomy_phylum_data <- read_and_transform_taxonomy_xlsx(
+        "data/Taxanomy_Summary.xlsx",
+        sheet = 1
+      )
+
+      taxonomy_phylum_data <- taxonomy_phylum_data %>%
+        dplyr::mutate(
+          category = "Phylum"
+        )
+
+      taxonomy_genus_data <- read_and_transform_taxonomy_xlsx(
+        "data/Taxanomy_Summary.xlsx",
+        sheet = 2
+      )
+
+      taxonomy_genus_data <- taxonomy_genus_data %>%
+        dplyr::mutate(
+          category = "Genus"
+        )
+
+      taxonomy_data <- rbind(
+        taxonomy_phylum_data,
+        taxonomy_genus_data
+      )
+
+      taxonomy_data <- taxonomy_data %>%
+        dplyr::arrange(location)
+
+      taxonomy_data <- taxonomy_data %>%
+        dplyr::mutate(
+          location = as.factor(location)
+        )
+
+      taxonomy_data_splitted <- split(taxonomy_data, taxonomy_data$location)
+
+      plot_list <- lapply(taxonomy_data_splitted, generate_leaflet_plot_list)
+
+      fl = lapply(
+        plot_list
+        , function(j) {
+          fl = tempfile(fileext = ".html")
+          htmlwidgets::saveWidget(j, file = fl)
+          return(fl)
+        }
+      )
+
+      leaflet_taxonomy_data <- taxonomy_data %>%
+        dplyr::distinct(location, longitude, latitude)
+
+      leaflet_taxonomy_data <- leaflet_taxonomy_data %>%
+        dplyr::arrange(location)
+
+      leaflet(leaflet_taxonomy_data) %>%
+        addTiles() %>%
+        addMarkers(lng = ~longitude, lat = ~latitude, group = "location") %>%
+        leafpop:::addPopupIframes(fl, group = "location", width = 600, height = 400)
+
+    })
+
+
+  })
 
 
 }
