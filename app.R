@@ -148,6 +148,81 @@ ui <- fluidPage(
         )
       )
     ),
+    
+    shiny::tabPanel(
+      title = "Bacterial pathways",
+      shiny::sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          shinyWidgets::pickerInput(
+            inputId = "pathway_label",
+            label = "Select pathways",
+            choices = unique(bacterial_pathway_frame$pathway_label),
+            options = list(
+              `actions-box` = TRUE,
+              `live-search` = TRUE,
+              multiple = TRUE
+            ),
+            multiple = TRUE
+          ),
+          
+          shiny::uiOutput("pathway_species_ui"),
+          
+          shiny::radioButtons(
+            inputId = "visualization",
+            label = "Select visualisation",
+            choices = c(
+              "Heatmap only" = "heatmap",
+              "Boxplots only" = "boxplots",
+              "Both" = "both"
+            ),
+            selected = "heatmap"
+          ),
+          
+          shiny::conditionalPanel(
+            condition = "input.visualization == 'heatmap' || input.visualization == 'both'",
+            radioButtons(
+              inputId = "rescaling",
+              label = "Rescaling",
+              choices = c("On" = "on", "Off" = "off"),
+              selected = "off"
+            ),
+            
+            shiny::radioButtons(
+              inputId = "clustering",
+              label = "Heatmap clustering",
+              choices = c("On" = "both", "Off" = "none"),
+              selected = "none"
+            )
+          ),
+          
+          shiny::conditionalPanel(
+            condition = "input.visualization == 'boxplots' || input.visualization == 'both'",
+            shiny::radioButtons(
+              inputId = "grouping_variable",
+              label = "Grouping variable",
+              choices = c(
+                "Host type",
+                "Geographic origin",
+                "Sampling location",
+                "Developmental stage"
+              ),
+              selected = "Host type"
+            )
+          ),
+          
+          shiny::actionButton("apply", "Apply"),
+          shiny::uiOutput("legend_table")
+          
+        ),
+        
+        shiny::mainPanel(
+          shiny::uiOutput("visualization_output"),
+          # Use uiOutput() to conditionally render the heatmap and/or boxplots
+          shiny::tableOutput("table")  # Add tableOutput() here to always display the table at the bottom
+        )
+      )
+    ),
 
     shiny::tabPanel(
       title = "Metabolite profiles",
