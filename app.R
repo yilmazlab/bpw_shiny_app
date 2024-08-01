@@ -16,12 +16,15 @@ library(stringr)
 library(leafpop)
 library(htmlwidgets)
 library(qs)
+
 source("utils/utils.R")
 source("utils/taxonomy_16S_utils.R")
+source("utils/taxonomy_meta_utils.R")
 source("utils/metabolites_utils.R")
 
 bacterial_pathway_frame <- qs::qread("data/bacterial_pathways.qs")
 taxonomy_16S_frame <- qs::qread("data/taxonomy_16S.qs")
+taxonomy_meta_frame <- qread("data/taxonomy_meta.qs")
 metabolites_frame <- qread(("data/metabolites.qs"))
 
 ui <- fluidPage(
@@ -51,7 +54,7 @@ ui <- fluidPage(
     ),
     
     shiny::tabPanel(
-      title = "16S taxonomy profiles",
+      title = "Taxonomy profiles (16S amplicon sequencing)",
       shiny::sidebarLayout(
         sidebarPanel(
           width = 3,
@@ -80,7 +83,7 @@ ui <- fluidPage(
           conditionalPanel(
             condition = "input.visualization_16S == 'boxplot'",
             selectInput(
-              inputId = "grouping_variable",
+              inputId = "grouping_variable_16S",  
               label = "Select grouping variable",
               choices = c("Geographic origin" = "Origin", 
                           "Host type" = "Group", 
@@ -145,6 +148,97 @@ ui <- fluidPage(
         mainPanel(
           plotlyOutput("plot_output_16S", height = "800px"),
           uiOutput("taxonomy_16S_info")
+        )
+      )
+    ),
+    
+    shiny::tabPanel(
+      title = "Taxonomy profiles (untargeted sequencing)",
+      shiny::sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          radioButtons(
+            inputId = "visualization_meta",
+            label = "Select visualisation",
+            choices = c("Barplot" = "barplot", "Boxplot" = "boxplot"),
+            selected = "barplot"
+          ),
+          pickerInput(
+            inputId = "taxonomic_level_meta",
+            label = "Select taxonomic level",
+            choices = c("Phylum", "Class", "Order", "Family", "Genus", "Species"),
+            selected = "Phylum",
+            options = list(`actions-box` = TRUE, `live-search` = TRUE),
+            multiple = FALSE
+          ),
+          pickerInput(
+            inputId = "taxonomy_meta",
+            label = "Select taxa",
+            choices = NULL,
+            selected = NULL,
+            options = list(`actions-box` = TRUE, `live-search` = TRUE, multiple = TRUE),
+            multiple = TRUE
+          ),
+          conditionalPanel(
+            condition = "input.visualization_meta == 'boxplot'",
+            selectInput(
+              inputId = "grouping_variable_meta",
+              label = "Select grouping variable",
+              choices = c("Geographic location" = "Location", 
+                          "Host type" = "Group", 
+                          "Sampling location" = "SamplingLocation", 
+                          "Sex" = "Gender", 
+                          "Developmental stage" = "Young_Adult"),
+              selected = "Group"
+            )
+          ),
+          hr(),
+          h4("Select subsetting options:"),
+          pickerInput(
+            inputId = "location_meta",
+            label = "Geographic location",
+            choices = unique(taxonomy_meta_frame$Location),
+            selected = unique(taxonomy_meta_frame$Location),
+            options = list(`actions-box` = TRUE, `live-search` = TRUE, multiple = TRUE),
+            multiple = TRUE
+          ),
+          pickerInput(
+            inputId = "group_meta",
+            label = "Host type",
+            choices = unique(taxonomy_meta_frame$Group),
+            selected = unique(taxonomy_meta_frame$Group),
+            options = list(`actions-box` = TRUE, `live-search` = TRUE, multiple = TRUE),
+            multiple = TRUE
+          ),
+          pickerInput(
+            inputId = "sampling_location_meta",
+            label = "Sampling location",
+            choices = unique(taxonomy_meta_frame$SamplingLocation),
+            selected = unique(taxonomy_meta_frame$SamplingLocation),
+            options = list(`actions-box` = TRUE, `live-search` = TRUE, multiple = TRUE),
+            multiple = TRUE
+          ),
+          pickerInput(
+            inputId = "gender_meta",
+            label = "Sex",
+            choices = unique(taxonomy_meta_frame$Gender),
+            selected = unique(taxonomy_meta_frame$Gender),
+            options = list(`actions-box` = TRUE, `live-search` = TRUE, multiple = TRUE),
+            multiple = TRUE
+          ),
+          pickerInput(
+            inputId = "young_adult_meta",
+            label = "Developmental stage",
+            choices = unique(taxonomy_meta_frame$Young_Adult),
+            selected = unique(taxonomy_meta_frame$Young_Adult),
+            options = list(`actions-box` = TRUE, `live-search` = TRUE, multiple = TRUE),
+            multiple = TRUE
+          ),
+          actionButton("apply_meta", "Apply")
+        ),
+        mainPanel(
+          plotlyOutput("plot_output_meta", height = "800px"),
+          uiOutput("taxonomy_meta_info")
         )
       )
     ),
@@ -259,22 +353,7 @@ ui <- fluidPage(
             choices = c("On" = "both", "Off" = "none"),
             selected = "none"
           )
-        ),  
-        
-        shiny::conditionalPanel(
-          condition = "input.visualization_metabolites == 'boxplots' || input.visualization_metabolites == 'both'",
-          shiny::radioButtons(
-            inputId = "grouping_variable",
-            label = "Grouping variable",
-            choices = c(
-              "Host type" = "Group",
-              "Geographic origin" = "Origin",
-              "Sampling location" = "SampleType",
-              "Developmental stage" = "Adult_Pups"
-            ),
-            selected = "Group"
-          )
-        ),
+        ), 
         
         shiny::actionButton("apply_metabolites", "Apply"),
         shiny::uiOutput("legend_table_metabolites")
@@ -849,7 +928,7 @@ server <- function(input, output, session) {
       select(geographic_location, sample_id)
     
     table_html <- table_data %>%
-      kable("html", escape = FALSE, col.names = c("Geographic location", "Sample id")) %>%
+      kable("html", escape = FALSE, col.names = c("Geographic location", "Sample")) %>%
       kable_styling("striped", full_width = FALSE)
     
     HTML(table_html)
@@ -929,7 +1008,7 @@ server <- function(input, output, session) {
     
     if (input$visualization_16S == "barplot") {
       hovertext <- paste(
-        "SampleID:", df_subset_16S$SampleID, "<br>",
+        "Sample:", df_subset_16S$SampleID, "<br>",
         "Taxonomy:", df_subset_16S$taxonomy, "<br>",
         "Relative Abundance:", round(df_subset_16S$relative_abundance, 4), "<br>",
         "Origin:", df_subset_16S$Origin, "<br>",
@@ -945,15 +1024,15 @@ server <- function(input, output, session) {
               hoverinfo = 'text', text = hovertext) %>%
         layout(barmode = 'stack', 
                title = paste('Relative Abundance of Taxonomies -', input$taxonomic_level),
-               xaxis = list(title = 'Sample ID'),
+               xaxis = list(title = 'Sample'),
                yaxis = list(title = 'Relative Abundance'),
                showlegend = FALSE)
       
     } else {
-      grouping_var <- input$grouping_variable
+      grouping_var_16 <- input$grouping_variable_16S
       
       boxplots <- df_subset_16S %>%
-        ggplot(aes_string(x = grouping_var, y = "relative_abundance", fill = "taxonomy")) +
+        ggplot(aes_string(x = grouping_var_16, y = "relative_abundance", fill = "taxonomy")) +
         geom_boxplot(outlier.shape = NA) +
         geom_jitter(width = 0.2, alpha = 0.5) +
         facet_wrap(~ taxonomy, scales = "free_y") +
@@ -965,7 +1044,7 @@ server <- function(input, output, session) {
                                "Group" = "Host type", 
                                "SampleType" = "Sampling location", 
                                "Gender" = "Sex", 
-                               "Season" = "Sampling season") == grouping_var)), 
+                               "Season" = "Sampling season") == grouping_var_16)), 
              y = "Relative Abundance",
              title = paste('Relative Abundance of Taxonomies -', input$taxonomic_level))
       
@@ -990,6 +1069,147 @@ server <- function(input, output, session) {
         taxonomy = cell_spec(taxonomy, "html", 
                              color = "white", 
                              background = adjustcolor(taxonomy_16S_color, alpha.f = 0.7))
+      )
+    
+    table_html <- table_data %>%
+      select(taxonomy, mean_abundance) %>%
+      kable("html", escape = FALSE, col.names = c("Taxonomy", "Mean Relative Abundance")) %>%
+      kable_styling("striped", full_width = FALSE)
+    
+    HTML(paste("<h4>Mean Relative Abundance</h4>", table_html))
+  })
+  
+  observe({
+    req(input$taxonomic_level_meta)
+    selected_level <- input$taxonomic_level_meta
+    
+    # Create a mapping between UI choices and data frame values
+    level_mapping <- c(
+      "Phylum" = "Phylum",
+      "Class" = "Class",
+      "Order" = "Order",
+      "Family" = "Family",
+      "Genus" = "Genus",
+      "Species" = "Species"
+    )
+    
+    # Use the mapping to get the correct level for filtering
+    data_level <- level_mapping[selected_level]
+    
+    # Filter the data frame to get relevant taxonomies
+    relevant_data <- taxonomy_meta_frame %>%
+      filter(taxonomic_level == data_level)
+    
+    # Extract unique taxonomies
+    taxonomy_choices <- unique(relevant_data$taxonomy)
+    
+    # Update the pickerInput
+    updatePickerInput(
+      session = session,
+      inputId = "taxonomy_meta",
+      choices = taxonomy_choices,
+      selected = NULL
+    )
+  })
+  
+  df_subset_reactive_meta <- shiny::reactiveVal(NULL)
+  
+  observeEvent(input$apply_meta, {
+    req(input$taxonomic_level_meta)
+    
+    if (is.null(input$taxonomy_meta) || length(input$taxonomy_meta) == 0) {
+      shinyWidgets::show_alert(
+        title = "No taxa selected",
+        text = "Please select at least one taxon for the visualisation.",
+        type = "error"
+      )
+      return(NULL)
+    }
+    
+    subset_data <- transform_and_subset_data_meta(
+      raw_data = taxonomy_meta_frame,
+      taxonomic_level_filter = input$taxonomic_level_meta,
+      taxonomy_filter = input$taxonomy_meta,
+      location_filter = input$location_meta,
+      group_filter = input$group_meta,
+      sampling_location_filter = input$sampling_location_meta,
+      gender_filter = input$gender_meta,
+      young_adult_filter = input$young_adult_meta
+    )
+    
+    df_subset_reactive_meta(subset_data)
+  })
+  
+  output$plot_output_meta <- renderPlotly({
+    req(df_subset_reactive_meta())
+    df_subset_meta <- df_subset_reactive_meta()
+    
+    if (nrow(df_subset_meta) == 0) {
+      return(NULL)
+    }
+    
+    if (input$visualization_meta == "barplot") {
+      hovertext <- paste(
+        "Sample:", df_subset_meta$Sample, "<br>",
+        "Taxonomy:", df_subset_meta$taxonomy, "<br>",
+        "Relative Abundance:", round(df_subset_meta$relative_abundance, 4), "<br>",
+        "Location:", df_subset_meta$Location, "<br>",
+        "Group:", df_subset_meta$Group, "<br>",
+        "SamplingLocation:", df_subset_meta$SamplingLocation, "<br>",
+        "Gender:", df_subset_meta$Gender, "<br>",
+        "Young_Adult:", df_subset_meta$Young_Adult
+      )
+      
+      plot_ly(df_subset_meta, x = ~Sample, y = ~relative_abundance, type = 'bar', color = ~taxonomy,
+              colors = setNames(df_subset_meta$taxonomy_meta_color, df_subset_meta$taxonomy),
+              hoverinfo = 'text', text = hovertext) %>%
+        layout(barmode = 'stack', 
+               title = paste('Relative Abundance of Taxonomies -', input$taxonomic_level_meta),
+               xaxis = list(title = 'Sample'),
+               yaxis = list(title = 'Relative Abundance'),
+               showlegend = FALSE)
+      
+    } else {
+      grouping_var_meta <- input$grouping_variable_meta
+      
+      boxplots <- df_subset_meta %>%
+        ggplot(aes_string(x = grouping_var_meta, y = "relative_abundance", fill = "taxonomy")) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(width = 0.2, alpha = 0.5) +
+        facet_wrap(~ taxonomy, scales = "free_y") +
+        scale_fill_manual(values = setNames(unique(df_subset_meta$taxonomy_meta_color), unique(df_subset_meta$taxonomy))) +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "none") +
+        labs(x = names(which(c("Location" = "Geographic location", 
+                               "Group" = "Host type", 
+                               "SamplingLocation" = "Sampling location", 
+                               "Gender" = "Sex", 
+                               "Young_Adult" = "Developmental stage") == grouping_var_meta)), 
+             y = "Relative Abundance",
+             title = paste('Relative Abundance of Taxonomies -', input$taxonomic_level_meta))
+      
+      ggplotly(boxplots)
+    }
+  })
+  
+  output$taxonomy_meta_info <- renderUI({
+    req(df_subset_reactive_meta())
+    df_subset_meta <- df_subset_reactive_meta()
+    
+    if (nrow(df_subset_meta) == 0) {
+      return(NULL)
+    }
+    
+    table_data <- df_subset_meta %>%
+      group_by(taxonomy, taxonomy_meta_color) %>%
+      summarise(mean_abundance = mean(relative_abundance), .groups = "drop") %>%
+      arrange(desc(mean_abundance)) %>%
+      mutate(
+        mean_abundance = sprintf("%.4f", mean_abundance),
+        taxonomy = cell_spec(taxonomy, "html", 
+                             color = "white", 
+                             background = adjustcolor(taxonomy_meta_color, alpha.f = 0.7))
       )
     
     table_html <- table_data %>%
